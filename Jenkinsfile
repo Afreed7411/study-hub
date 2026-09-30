@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = 'studyhub'
-        VENV       = '.venv'
+        VENV = '.venv'
+        PORT = '5000'
     }
 
     options {
@@ -12,49 +12,91 @@ pipeline {
     }
 
     stages {
-        stage('Checkout') { steps { checkout scm } }
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
 
         stage('Setup') {
             steps {
-                sh '''
-                    python3 -m venv ${VENV}
-                    . ${VENV}/bin/activate
-                    pip install --upgrade pip
-                    pip install -r requirements-dev.txt
+                bat '''
+                    if not exist "%VENV%\\Scripts\\python.exe" (
+                        python -m venv %VENV%
+                    )
+
+                    %VENV%\\Scripts\\python.exe -m pip install --upgrade pip
+                    %VENV%\\Scripts\\pip.exe install -r requirements-dev.txt
                 '''
             }
         }
 
         stage('Lint') {
-            steps { sh '. ${VENV}/bin/activate && flake8 app tests wsgi.py --max-line-length=100' }
+            steps {
+                bat '''
+                    %VENV%\\Scripts\\flake8.exe app tests wsgi.py --max-line-length=100
+                '''
+            }
         }
 
         stage('Test') {
             steps {
-                sh '. ${VENV}/bin/activate && pytest --junitxml=test-results.xml --cov=app --cov-report=xml'
+                bat '''
+                    %VENV%\\Scripts\\pytest.exe tests --junitxml=test-results.xml --cov=app --cov-report=xml
+                '''
             }
-            post { always { junit 'test-results.xml' } }
+
+            post {
+                always {
+                    junit 'test-results.xml'
+                }
+            }
         }
 
-        stage('Build Docker Image') {
-            steps { sh 'docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} -t ${IMAGE_NAME}:latest .' }
-        }
-
-        stage('Deploy') {
+        stage('Start Application') {
             steps {
-                sh '''
-                    docker rm -f ${IMAGE_NAME} || true
-                    docker run -d --name ${IMAGE_NAME} -p 5000:5000 \
-                        -v studyhub-data:/app/instance ${IMAGE_NAME}:latest
-                    sleep 4
-                    curl -f -o /dev/null http://localhost:5000/login
+                bat '''
+                    echo Starting StudyHub...
+
+                    if exist app.pid (
+                        for /f "tokens=*" %%i in (app.pid) do taskkill /PID %%i /F 2>NUL
+                        del app.pid
+                    )
+
+                    start "StudyHub" /B %VENV%\\Scripts\\python.exe wsgi.py > studyhub.log 2>&1
+
+                    timeout /t 5 /nobreak > NUL
+
+                    echo Application started.
+                '''
+            }
+        }
+
+        stage('Health Check') {
+            steps {
+                bat '''
+                    curl.exe -f http://localhost:%PORT%/login
+
+                    if %ERRORLEVEL% NEQ 0 (
+                        echo Application health check failed.
+                        exit /b 1
+                    )
+
+                    echo StudyHub is running successfully.
                 '''
             }
         }
     }
 
     post {
-        success { echo 'StudyHub deployed at http://<jenkins-host>:5000' }
-        failure { echo 'Pipeline failed - check the stage logs.' }
+        success {
+            echo 'StudyHub build, tests and deployment completed successfully.'
+            echo 'Application: http://localhost:5000'
+        }
+
+        failure {
+            echo 'Pipeline failed - check the stage logs.'
+        }
     }
 }
