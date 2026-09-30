@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<h4>Study Timer (Pomodoro)</h4>
+<div class="card shadow-sm mx-auto mt-3" style="max-width:420px"><div class="card-body text-center">
+  <div id="display" class="display-2 fw-bold mb-3">25:00</div>
+  <select id="course" class="form-select mb-2">
+    <option value="">No course</option>
+    {% for c in courses %}<option value="{{ c.id }}">{{ c.code }}</option>{% endfor %}
+  </select>
+  <select id="length" class="form-select mb-3">
+    <option value="25">25 min focus</option><option value="45">45 min focus</option><option value="1">1 min (test)</option>
+  </select>
+  <button id="start" class="btn btn-primary">Start</button>
+  <button id="reset" class="btn btn-outline-secondary">Reset</button>
+  <p id="msg" class="mt-3 mb-0 text-muted"></p>
+</div></div>
+<script>
+let timer = null, remaining = 0, total = 0;
+const $ = id => document.getElementById(id);
+const show = s => $('display').textContent =
+  String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+
+$('length').onchange = () => { if (!timer) show($('length').value * 60); };
+
+$('start').onclick = () => {
+  if (timer) return;
+  total = remaining = $('length').value * 60;
+  timer = setInterval(async () => {
+    remaining--; show(remaining);
+    if (remaining <= 0) {
+      clearInterval(timer); timer = null;
+      const res = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json',
+                  'X-CSRFToken': document.querySelector('meta[name=csrf-token]').content},
+        body: JSON.stringify({minutes: total / 60, course_id: $('course').value || null})
+      });
+      $('msg').textContent = res.ok ? 'Session logged. Take a break!' : 'Could not save session.';
+    }
+  }, 1000);
+};
+
+$('reset').onclick = () => {
+  clearInterval(timer); timer = null; show($('length').value * 60); $('msg').textContent = '';
+};
+</script>
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3"><div class="card text-center shadow-sm"><div class="card-body">
+    <div class="text-muted small">CGPA (10-pt)</div><div class="fs-2 fw-bold">{{ cgpa if cgpa is not none else '--' }}</div></div></div></div>
+  <div class="col-6 col-md-3"><div class="card text-center shadow-sm"><div class="card-body">
+    <div class="text-muted small">Overdue tasks</div><div class="fs-2 fw-bold {{ 'text-danger' if overdue }}">{{ overdue|length }}</div></div></div></div>
+  <div class="col-6 col-md-3"><div class="card text-center shadow-sm"><div class="card-body">
+    <div class="text-muted small">Tasks completed</div><div class="fs-2 fw-bold text-success">{{ done_count }}</div></div></div></div>
+  <div class="col-6 col-md-3"><div class="card text-center shadow-sm"><div class="card-body">
+    <div class="text-muted small">Study time (7 days)</div><div class="fs-2 fw-bold">{{ (minutes // 60) }}h {{ minutes % 60 }}m</div></div></div></div>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-6">
+    <div class="card shadow-sm"><div class="card-header fw-bold">Upcoming deadlines</div>
+      <ul class="list-group list-group-flush">
+        {% for t in overdue %}
+        <li class="list-group-item d-flex justify-content-between">
+          <span>{{ t.title }}</span><span class="badge bg-danger">overdue {{ t.due_date }}</span></li>
+        {% endfor %}
+        {% for t in upcoming %}
+        <li class="list-group-item d-flex justify-content-between">
+          <span>{{ t.title }} <small class="text-muted">{{ t.course.code if t.course }}</small></span>
+          <span class="badge bg-secondary">{{ t.due_date }}</span></li>
+        {% endfor %}
+        {% if not overdue and not upcoming %}<li class="list-group-item text-muted">Nothing pending. 🎉</li>{% endif %}
+      </ul>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card shadow-sm"><div class="card-header fw-bold">Course performance</div>
+      <ul class="list-group list-group-flush">
+        {% for r in rows %}
+        <li class="list-group-item">
+          <div class="d-flex justify-content-between">
+            <a href="{{ url_for('main.course_detail', course_id=r.course.id) }}">{{ r.course.code }} - {{ r.course.name }}</a>
+            <span>{{ '%.1f'|format(r.pct) ~ '%' if r.pct is not none else 'no grades' }}</span>
+          </div>
+          <div class="progress mt-1" style="height:6px"><div class="progress-bar" style="width: {{ r.pct or 0 }}%"></div></div>
+        </li>
+        {% else %}<li class="list-group-item text-muted">Add a course to get started.</li>{% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}
