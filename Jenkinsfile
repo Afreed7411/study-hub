@@ -17,7 +17,9 @@ pipeline {
         stage('Setup') {
             steps {
                 bat '''
-                    echo Checking Python...
+                    echo ========================================
+                    echo Checking Python
+                    echo ========================================
 
                     "%PYTHON%" --version
 
@@ -38,7 +40,9 @@ pipeline {
         stage('Lint') {
             steps {
                 bat '''
-                    echo Running Flake8...
+                    echo ========================================
+                    echo Running Flake8
+                    echo ========================================
 
                     "%VENV%\\Scripts\\python.exe" -m flake8 app tests wsgi.py --max-line-length=100
                 '''
@@ -48,7 +52,9 @@ pipeline {
         stage('Test') {
             steps {
                 bat '''
-                    echo Running tests...
+                    echo ========================================
+                    echo Running Tests
+                    echo ========================================
 
                     "%VENV%\\Scripts\\python.exe" -m pytest tests --junitxml=test-results.xml --cov=app --cov-report=xml
                 '''
@@ -64,12 +70,19 @@ pipeline {
         stage('Start Application') {
             steps {
                 bat '''
-                    echo Starting StudyHub...
+                    echo ========================================
+                    echo Starting StudyHub
+                    echo ========================================
+
+                    if exist studyhub.log del /F /Q studyhub.log
 
                     start "StudyHub" /B "%VENV%\\Scripts\\python.exe" wsgi.py > studyhub.log 2>&1
 
-                    echo Waiting for application...
-                    timeout /t 5 /nobreak > NUL
+                    echo Waiting for application to start...
+
+                    powershell -Command "Start-Sleep -Seconds 5"
+
+                    echo Application startup completed.
                 '''
             }
         }
@@ -77,19 +90,26 @@ pipeline {
         stage('Health Check') {
             steps {
                 bat '''
-                    echo Checking StudyHub...
+                    echo ========================================
+                    echo Health Check
+                    echo ========================================
 
                     curl.exe -f http://localhost:%PORT%/login
 
                     if %ERRORLEVEL% NEQ 0 (
-                        echo Application health check FAILED.
+                        echo.
+                        echo ========================================
+                        echo APPLICATION FAILED
+                        echo ========================================
+                        echo.
+                        echo Application logs:
                         type studyhub.log
                         exit /b 1
                     )
 
                     echo.
                     echo ========================================
-                    echo StudyHub is running successfully!
+                    echo STUDYHUB IS RUNNING
                     echo http://localhost:%PORT%
                     echo ========================================
                 '''
@@ -99,12 +119,17 @@ pipeline {
 
     post {
         success {
-            echo 'StudyHub CI/CD pipeline completed successfully!'
+            echo '========================================'
+            echo 'StudyHub CI/CD Pipeline SUCCESS'
             echo 'Application: http://localhost:5000'
+            echo '========================================'
         }
 
         failure {
-            echo 'Pipeline failed - check the stage logs.'
+            echo '========================================'
+            echo 'Pipeline FAILED'
+            echo 'Check the stage logs.'
+            echo '========================================'
         }
     }
 }
