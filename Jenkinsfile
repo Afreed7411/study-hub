@@ -2,8 +2,9 @@ pipeline {
     agent any
 
     environment {
-        VENV = '.venv'
-        PORT = '5000'
+        PYTHON = 'C:\\Users\\HP\\AppData\\Local\\Programs\\Python\\Python314\\python.exe'
+        VENV   = '.venv'
+        PORT   = '5000'
     }
 
     options {
@@ -13,21 +14,23 @@ pipeline {
 
     stages {
 
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-
         stage('Setup') {
             steps {
                 bat '''
+                    echo Checking Python...
+
+                    "%PYTHON%" --version
+
                     if not exist "%VENV%\\Scripts\\python.exe" (
-                        python -m venv %VENV%
+                        echo Creating virtual environment...
+                        "%PYTHON%" -m venv "%VENV%"
                     )
 
-                    %VENV%\\Scripts\\python.exe -m pip install --upgrade pip
-                    %VENV%\\Scripts\\pip.exe install -r requirements-dev.txt
+                    echo Upgrading pip...
+                    "%VENV%\\Scripts\\python.exe" -m pip install --upgrade pip
+
+                    echo Installing dependencies...
+                    "%VENV%\\Scripts\\python.exe" -m pip install -r requirements-dev.txt
                 '''
             }
         }
@@ -35,7 +38,9 @@ pipeline {
         stage('Lint') {
             steps {
                 bat '''
-                    %VENV%\\Scripts\\flake8.exe app tests wsgi.py --max-line-length=100
+                    echo Running Flake8...
+
+                    "%VENV%\\Scripts\\python.exe" -m flake8 app tests wsgi.py --max-line-length=100
                 '''
             }
         }
@@ -43,7 +48,9 @@ pipeline {
         stage('Test') {
             steps {
                 bat '''
-                    %VENV%\\Scripts\\pytest.exe tests --junitxml=test-results.xml --cov=app --cov-report=xml
+                    echo Running tests...
+
+                    "%VENV%\\Scripts\\python.exe" -m pytest tests --junitxml=test-results.xml --cov=app --cov-report=xml
                 '''
             }
 
@@ -59,16 +66,10 @@ pipeline {
                 bat '''
                     echo Starting StudyHub...
 
-                    if exist app.pid (
-                        for /f "tokens=*" %%i in (app.pid) do taskkill /PID %%i /F 2>NUL
-                        del app.pid
-                    )
+                    start "StudyHub" /B "%VENV%\\Scripts\\python.exe" wsgi.py > studyhub.log 2>&1
 
-                    start "StudyHub" /B %VENV%\\Scripts\\python.exe wsgi.py > studyhub.log 2>&1
-
+                    echo Waiting for application...
                     timeout /t 5 /nobreak > NUL
-
-                    echo Application started.
                 '''
             }
         }
@@ -76,14 +77,21 @@ pipeline {
         stage('Health Check') {
             steps {
                 bat '''
+                    echo Checking StudyHub...
+
                     curl.exe -f http://localhost:%PORT%/login
 
                     if %ERRORLEVEL% NEQ 0 (
-                        echo Application health check failed.
+                        echo Application health check FAILED.
+                        type studyhub.log
                         exit /b 1
                     )
 
-                    echo StudyHub is running successfully.
+                    echo.
+                    echo ========================================
+                    echo StudyHub is running successfully!
+                    echo http://localhost:%PORT%
+                    echo ========================================
                 '''
             }
         }
@@ -91,7 +99,7 @@ pipeline {
 
     post {
         success {
-            echo 'StudyHub build, tests and deployment completed successfully.'
+            echo 'StudyHub CI/CD pipeline completed successfully!'
             echo 'Application: http://localhost:5000'
         }
 
